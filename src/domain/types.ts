@@ -1,95 +1,95 @@
 // Tipos de domínio do PoolBrackets.
-// Mantidos puros e serializáveis em JSON (fotos ficam à parte, como Blob),
+// Mantidos puros e serializáveis em JSON (fotos ficam à parte, como Blobs),
 // para mapear diretamente para endpoints/tabelas no futuro.
 
-export type TipoCampeonato = 'individual' | 'dupla'
+export type ChampionshipType = 'individual' | 'doubles'
 
-export type StatusCampeonato = 'inscricoes' | 'em_andamento' | 'finalizado'
+export type ChampionshipStatus = 'registration' | 'in_progress' | 'finished'
 
-export type StatusPagamento = 'pago' | 'pendente'
+export type PaymentStatus = 'paid' | 'pending'
 
-/** Em qual lado de uma partida um vencedor será encaixado. */
-export type Lado = 'A' | 'B'
+/** Em qual lado de uma partida um vencedor é encaixado. */
+export type Side = 'A' | 'B'
 
-export interface Campeonato {
+export interface Championship {
   id: string
-  nome: string
-  tipo: TipoCampeonato
-  /** Quando true, `valorEntradaCentavos` e o bolão passam a valer. */
-  apostaAtiva: boolean
+  name: string
+  type: ChampionshipType
+  /** Quando true, `entryFeeCents` e o bolão passam a valer. */
+  betEnabled: boolean
   /** Valor da entrada em centavos (0 quando a aposta está desativada). */
-  valorEntradaCentavos: number
-  /** Chave Pix do organizador (opcional, para gerar o QR Code). */
-  chavePix?: string
-  status: StatusCampeonato
+  entryFeeCents: number
+  /** Chave Pix do organizador (opcional, usada para gerar o QR Code). */
+  pixKey?: string
+  status: ChampionshipStatus
   /** Definido quando o campeonato é finalizado. */
-  campeaoTimeId?: string
+  championTeamId?: string
   /** ISO 8601. */
-  criadoEm: string
+  createdAt: string
   /** ISO 8601. */
-  atualizadoEm: string
+  updatedAt: string
 }
 
-export interface Time {
+export interface Team {
   id: string
-  campeonatoId: string
-  /** No modo individual, é o nome do jogador; no modo dupla, o nome do time. */
-  nome: string
+  championshipId: string
+  /** No modo individual é o nome do jogador; no modo dupla, o nome do time. */
+  name: string
   /** Preenchido no modo dupla. */
-  jogador1?: string
+  player1?: string
   /** Preenchido no modo dupla. */
-  jogador2?: string
+  player2?: string
   /** Referência para a foto (Blob) guardada à parte. */
-  fotoId?: string
-  statusPagamento: StatusPagamento
-  criadoEm: string
+  photoId?: string
+  paymentStatus: PaymentStatus
+  createdAt: string
 }
 
-export interface Foto {
+export interface Photo {
   id: string
-  campeonatoId: string
+  championshipId: string
   blob: Blob
 }
 
-export interface Partida {
+export interface Match {
   id: string
-  campeonatoId: string
+  championshipId: string
   /** 1 = primeira rodada; cresce até a final. */
-  rodada: number
+  round: number
   /** Posição da partida dentro da rodada (0-based), de cima para baixo. */
-  ordem: number
+  order: number
   /** Partidas comuns são melhor de 1; a final é melhor de 3. */
-  melhorDe: 1 | 3
-  ladoATimeId?: string
-  ladoBTimeId?: string
-  vencedorTimeId?: string
+  bestOf: 1 | 3
+  sideATeamId?: string
+  sideBTeamId?: string
+  winnerTeamId?: string
   /** Vitórias de cada lado (relevante na final, melhor de 3). */
-  vitoriasA: number
-  vitoriasB: number
+  winsA: number
+  winsB: number
   /** Partida de BYE: um dos lados avança sem jogar. */
   bye: boolean
   /** Para onde o vencedor avança (undefined = final). */
-  proximaPartidaId?: string
+  nextMatchId?: string
   /** Em qual lado da próxima partida o vencedor entra. */
-  proximoLado?: Lado
+  nextSide?: Side
 }
 
 /**
  * Pacote de backup exportado/importado como JSON.
- * Fotos vão em base64 (dataUrl) para caber em um único arquivo.
+ * Fotos vão em base64 (data URL) para caber em um único arquivo.
  */
-export interface BackupCampeonato {
-  versao: number
-  exportadoEm: string
-  campeonato: Campeonato
-  times: Time[]
-  partidas: Partida[]
-  fotos: FotoBackup[]
+export interface ChampionshipBackup {
+  version: number
+  exportedAt: string
+  championship: Championship
+  teams: Team[]
+  matches: Match[]
+  photos: PhotoBackup[]
 }
 
-export interface FotoBackup {
+export interface PhotoBackup {
   id: string
-  campeonatoId: string
+  championshipId: string
   /** data URL (ex: "data:image/jpeg;base64,...."). */
   dataUrl: string
 }

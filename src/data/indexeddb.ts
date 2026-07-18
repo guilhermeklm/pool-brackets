@@ -1,26 +1,29 @@
 import type {
-  BackupCampeonato,
-  Campeonato,
-  Foto,
-  Partida,
-  Time,
+  Championship,
+  ChampionshipBackup,
+  Match,
+  Photo,
+  Team,
 } from '../domain/types'
-import type { Repositorio } from './repositorio'
-import { blobParaDataUrl, dataUrlParaBlob } from './base64'
-import { novoId } from './uuid'
+import type { Repository } from './repository'
+import { blobToDataUrl, dataUrlToBlob } from './base64'
+import { newId } from './uuid'
 
-const NOME_DB = 'pool-brackets'
-const VERSAO_DB = 1
+const DB_NAME = 'pool-brackets'
+// v2: object stores renomeados para inglês (championships/teams/matches/photos).
+const DB_VERSION = 2
 
-const STORE_CAMPEONATOS = 'campeonatos'
-const STORE_TIMES = 'times'
-const STORE_PARTIDAS = 'partidas'
-const STORE_FOTOS = 'fotos'
+const STORE_CHAMPIONSHIPS = 'championships'
+const STORE_TEAMS = 'teams'
+const STORE_MATCHES = 'matches'
+const STORE_PHOTOS = 'photos'
 
-const VERSAO_BACKUP = 1
+const INDEX_CHAMPIONSHIP = 'championshipId'
+
+const BACKUP_VERSION = 1
 
 /** Envolve um IDBRequest numa Promise. */
-function promessa<T>(req: IDBRequest<T>): Promise<T> {
+function toPromise<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
@@ -28,7 +31,7 @@ function promessa<T>(req: IDBRequest<T>): Promise<T> {
 }
 
 /** Espera uma transação terminar (garante que os writes foram efetivados). */
-function fimDaTransacao(tx: IDBTransaction): Promise<void> {
+function transactionDone(tx: IDBTransaction): Promise<void> {
   return new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve()
     tx.onerror = () => reject(tx.error)
@@ -38,29 +41,25 @@ function fimDaTransacao(tx: IDBTransaction): Promise<void> {
 
 let dbPromise: Promise<IDBDatabase> | undefined
 
-function abrirDb(): Promise<IDBDatabase> {
+function openDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise
 
   dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(NOME_DB, VERSAO_DB)
+    const req = indexedDB.open(DB_NAME, DB_VERSION)
 
     req.onupgradeneeded = () => {
       const db = req.result
 
-      if (!db.objectStoreNames.contains(STORE_CAMPEONATOS)) {
-        db.createObjectStore(STORE_CAMPEONATOS, { keyPath: 'id' })
+      if (!db.objectStoreNames.contains(STORE_CHAMPIONSHIPS)) {
+        db.createObjectStore(STORE_CHAMPIONSHIPS, { keyPath: 'id' })
       }
-      if (!db.objectStoreNames.contains(STORE_TIMES)) {
-        const store = db.createObjectStore(STORE_TIMES, { keyPath: 'id' })
-        store.createIndex('campeonatoId', 'campeonatoId', { unique: false })
-      }
-      if (!db.objectStoreNames.contains(STORE_PARTIDAS)) {
-        const store = db.createObjectStore(STORE_PARTIDAS, { keyPath: 'id' })
-        store.createIndex('campeonatoId', 'campeonatoId', { unique: false })
-      }
-      if (!db.objectStoreNames.contains(STORE_FOTOS)) {
-        const store = db.createObjectStore(STORE_FOTOS, { keyPath: 'id' })
-        store.createIndex('campeonatoId', 'campeonatoId', { unique: false })
+      for (const name of [STORE_TEAMS, STORE_MATCHES, STORE_PHOTOS]) {
+        if (!db.objectStoreNames.contains(name)) {
+          const store = db.createObjectStore(name, { keyPath: 'id' })
+          store.createIndex(INDEX_CHAMPIONSHIP, 'championshipId', {
+            unique: false,
+          })
+        }
       }
     }
 
@@ -72,262 +71,260 @@ function abrirDb(): Promise<IDBDatabase> {
 }
 
 /** Busca todos os registros de um store filtrando por um índice. */
-async function porIndice<T>(
+async function byIndex<T>(
   store: string,
-  indice: string,
-  valor: IDBValidKey,
+  index: string,
+  value: IDBValidKey,
 ): Promise<T[]> {
-  const db = await abrirDb()
+  const db = await openDb()
   const tx = db.transaction(store, 'readonly')
-  const idx = tx.objectStore(store).index(indice)
-  return promessa(idx.getAll(valor) as IDBRequest<T[]>)
+  const idx = tx.objectStore(store).index(index)
+  return toPromise(idx.getAll(value) as IDBRequest<T[]>)
 }
 
 /**
- * Implementação de `Repositorio` sobre IndexedDB.
+ * Implementação de `Repository` sobre IndexedDB.
  * Persistência local para o modo offline da v1.
  */
-export class RepositorioIndexedDB implements Repositorio {
+export class IndexedDBRepository implements Repository {
   // ---- Campeonatos ----
 
-  async listarCampeonatos(): Promise<Campeonato[]> {
-    const db = await abrirDb()
-    const tx = db.transaction(STORE_CAMPEONATOS, 'readonly')
-    const todos = await promessa(
-      tx.objectStore(STORE_CAMPEONATOS).getAll() as IDBRequest<Campeonato[]>,
+  async listChampionships(): Promise<Championship[]> {
+    const db = await openDb()
+    const tx = db.transaction(STORE_CHAMPIONSHIPS, 'readonly')
+    const all = await toPromise(
+      tx.objectStore(STORE_CHAMPIONSHIPS).getAll() as IDBRequest<Championship[]>,
     )
-    return todos.sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
+    return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   }
 
-  async obterCampeonato(id: string): Promise<Campeonato | undefined> {
-    const db = await abrirDb()
-    const tx = db.transaction(STORE_CAMPEONATOS, 'readonly')
-    return promessa(
-      tx.objectStore(STORE_CAMPEONATOS).get(id) as IDBRequest<
-        Campeonato | undefined
+  async getChampionship(id: string): Promise<Championship | undefined> {
+    const db = await openDb()
+    const tx = db.transaction(STORE_CHAMPIONSHIPS, 'readonly')
+    return toPromise(
+      tx.objectStore(STORE_CHAMPIONSHIPS).get(id) as IDBRequest<
+        Championship | undefined
       >,
     )
   }
 
-  async salvarCampeonato(campeonato: Campeonato): Promise<void> {
-    const db = await abrirDb()
-    const tx = db.transaction(STORE_CAMPEONATOS, 'readwrite')
-    tx.objectStore(STORE_CAMPEONATOS).put(campeonato)
-    await fimDaTransacao(tx)
+  async saveChampionship(championship: Championship): Promise<void> {
+    const db = await openDb()
+    const tx = db.transaction(STORE_CHAMPIONSHIPS, 'readwrite')
+    tx.objectStore(STORE_CHAMPIONSHIPS).put(championship)
+    await transactionDone(tx)
   }
 
-  async removerCampeonato(id: string): Promise<void> {
-    const db = await abrirDb()
+  async deleteChampionship(id: string): Promise<void> {
+    const db = await openDb()
     const tx = db.transaction(
-      [STORE_CAMPEONATOS, STORE_TIMES, STORE_PARTIDAS, STORE_FOTOS],
+      [STORE_CHAMPIONSHIPS, STORE_TEAMS, STORE_MATCHES, STORE_PHOTOS],
       'readwrite',
     )
-    tx.objectStore(STORE_CAMPEONATOS).delete(id)
+    tx.objectStore(STORE_CHAMPIONSHIPS).delete(id)
     await Promise.all([
-      apagarPorIndice(tx, STORE_TIMES, id),
-      apagarPorIndice(tx, STORE_PARTIDAS, id),
-      apagarPorIndice(tx, STORE_FOTOS, id),
+      deleteByIndex(tx, STORE_TEAMS, id),
+      deleteByIndex(tx, STORE_MATCHES, id),
+      deleteByIndex(tx, STORE_PHOTOS, id),
     ])
-    await fimDaTransacao(tx)
+    await transactionDone(tx)
   }
 
   // ---- Times ----
 
-  async listarTimes(campeonatoId: string): Promise<Time[]> {
-    const times = await porIndice<Time>(STORE_TIMES, 'campeonatoId', campeonatoId)
-    return times.sort((a, b) => a.criadoEm.localeCompare(b.criadoEm))
+  async listTeams(championshipId: string): Promise<Team[]> {
+    const teams = await byIndex<Team>(
+      STORE_TEAMS,
+      INDEX_CHAMPIONSHIP,
+      championshipId,
+    )
+    return teams.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   }
 
-  async obterTime(id: string): Promise<Time | undefined> {
-    const db = await abrirDb()
-    const tx = db.transaction(STORE_TIMES, 'readonly')
-    return promessa(
-      tx.objectStore(STORE_TIMES).get(id) as IDBRequest<Time | undefined>,
+  async getTeam(id: string): Promise<Team | undefined> {
+    const db = await openDb()
+    const tx = db.transaction(STORE_TEAMS, 'readonly')
+    return toPromise(
+      tx.objectStore(STORE_TEAMS).get(id) as IDBRequest<Team | undefined>,
     )
   }
 
-  async salvarTime(time: Time): Promise<void> {
-    const db = await abrirDb()
-    const tx = db.transaction(STORE_TIMES, 'readwrite')
-    tx.objectStore(STORE_TIMES).put(time)
-    await fimDaTransacao(tx)
+  async saveTeam(team: Team): Promise<void> {
+    const db = await openDb()
+    const tx = db.transaction(STORE_TEAMS, 'readwrite')
+    tx.objectStore(STORE_TEAMS).put(team)
+    await transactionDone(tx)
   }
 
-  async removerTime(id: string): Promise<void> {
-    const db = await abrirDb()
-    const tx = db.transaction(STORE_TIMES, 'readwrite')
-    tx.objectStore(STORE_TIMES).delete(id)
-    await fimDaTransacao(tx)
+  async deleteTeam(id: string): Promise<void> {
+    const db = await openDb()
+    const tx = db.transaction(STORE_TEAMS, 'readwrite')
+    tx.objectStore(STORE_TEAMS).delete(id)
+    await transactionDone(tx)
   }
 
   // ---- Partidas ----
 
-  async listarPartidas(campeonatoId: string): Promise<Partida[]> {
-    const partidas = await porIndice<Partida>(
-      STORE_PARTIDAS,
-      'campeonatoId',
-      campeonatoId,
+  async listMatches(championshipId: string): Promise<Match[]> {
+    const matches = await byIndex<Match>(
+      STORE_MATCHES,
+      INDEX_CHAMPIONSHIP,
+      championshipId,
     )
-    return partidas.sort((a, b) =>
-      a.rodada - b.rodada || a.ordem - b.ordem,
-    )
+    return matches.sort((a, b) => a.round - b.round || a.order - b.order)
   }
 
-  async salvarPartida(partida: Partida): Promise<void> {
-    const db = await abrirDb()
-    const tx = db.transaction(STORE_PARTIDAS, 'readwrite')
-    tx.objectStore(STORE_PARTIDAS).put(partida)
-    await fimDaTransacao(tx)
+  async saveMatch(match: Match): Promise<void> {
+    const db = await openDb()
+    const tx = db.transaction(STORE_MATCHES, 'readwrite')
+    tx.objectStore(STORE_MATCHES).put(match)
+    await transactionDone(tx)
   }
 
-  async salvarPartidas(partidas: Partida[]): Promise<void> {
-    const db = await abrirDb()
-    const tx = db.transaction(STORE_PARTIDAS, 'readwrite')
-    const store = tx.objectStore(STORE_PARTIDAS)
-    for (const partida of partidas) store.put(partida)
-    await fimDaTransacao(tx)
+  async saveMatches(matches: Match[]): Promise<void> {
+    const db = await openDb()
+    const tx = db.transaction(STORE_MATCHES, 'readwrite')
+    const store = tx.objectStore(STORE_MATCHES)
+    for (const match of matches) store.put(match)
+    await transactionDone(tx)
   }
 
-  async removerPartidasDoCampeonato(campeonatoId: string): Promise<void> {
-    const db = await abrirDb()
-    const tx = db.transaction(STORE_PARTIDAS, 'readwrite')
-    await apagarPorIndice(tx, STORE_PARTIDAS, campeonatoId)
-    await fimDaTransacao(tx)
+  async deleteMatchesOfChampionship(championshipId: string): Promise<void> {
+    const db = await openDb()
+    const tx = db.transaction(STORE_MATCHES, 'readwrite')
+    await deleteByIndex(tx, STORE_MATCHES, championshipId)
+    await transactionDone(tx)
   }
 
   // ---- Fotos ----
 
-  async obterFoto(id: string): Promise<Foto | undefined> {
-    const db = await abrirDb()
-    const tx = db.transaction(STORE_FOTOS, 'readonly')
-    return promessa(
-      tx.objectStore(STORE_FOTOS).get(id) as IDBRequest<Foto | undefined>,
+  async getPhoto(id: string): Promise<Photo | undefined> {
+    const db = await openDb()
+    const tx = db.transaction(STORE_PHOTOS, 'readonly')
+    return toPromise(
+      tx.objectStore(STORE_PHOTOS).get(id) as IDBRequest<Photo | undefined>,
     )
   }
 
-  async salvarFoto(foto: Foto): Promise<void> {
-    const db = await abrirDb()
-    const tx = db.transaction(STORE_FOTOS, 'readwrite')
-    tx.objectStore(STORE_FOTOS).put(foto)
-    await fimDaTransacao(tx)
+  async savePhoto(photo: Photo): Promise<void> {
+    const db = await openDb()
+    const tx = db.transaction(STORE_PHOTOS, 'readwrite')
+    tx.objectStore(STORE_PHOTOS).put(photo)
+    await transactionDone(tx)
   }
 
-  async removerFoto(id: string): Promise<void> {
-    const db = await abrirDb()
-    const tx = db.transaction(STORE_FOTOS, 'readwrite')
-    tx.objectStore(STORE_FOTOS).delete(id)
-    await fimDaTransacao(tx)
+  async deletePhoto(id: string): Promise<void> {
+    const db = await openDb()
+    const tx = db.transaction(STORE_PHOTOS, 'readwrite')
+    tx.objectStore(STORE_PHOTOS).delete(id)
+    await transactionDone(tx)
   }
 
   // ---- Backup ----
 
-  async exportar(campeonatoId: string): Promise<BackupCampeonato> {
-    const campeonato = await this.obterCampeonato(campeonatoId)
-    if (!campeonato) {
-      throw new Error(`Campeonato ${campeonatoId} não encontrado.`)
+  async exportChampionship(championshipId: string): Promise<ChampionshipBackup> {
+    const championship = await this.getChampionship(championshipId)
+    if (!championship) {
+      throw new Error(`Championship ${championshipId} not found.`)
     }
 
-    const [times, partidas, fotos] = await Promise.all([
-      this.listarTimes(campeonatoId),
-      this.listarPartidas(campeonatoId),
-      porIndice<Foto>(STORE_FOTOS, 'campeonatoId', campeonatoId),
+    const [teams, matches, photos] = await Promise.all([
+      this.listTeams(championshipId),
+      this.listMatches(championshipId),
+      byIndex<Photo>(STORE_PHOTOS, INDEX_CHAMPIONSHIP, championshipId),
     ])
 
-    const fotosBackup = await Promise.all(
-      fotos.map(async (foto) => ({
-        id: foto.id,
-        campeonatoId: foto.campeonatoId,
-        dataUrl: await blobParaDataUrl(foto.blob),
+    const photosBackup = await Promise.all(
+      photos.map(async (photo) => ({
+        id: photo.id,
+        championshipId: photo.championshipId,
+        dataUrl: await blobToDataUrl(photo.blob),
       })),
     )
 
     return {
-      versao: VERSAO_BACKUP,
-      exportadoEm: new Date().toISOString(),
-      campeonato,
-      times,
-      partidas,
-      fotos: fotosBackup,
+      version: BACKUP_VERSION,
+      exportedAt: new Date().toISOString(),
+      championship,
+      teams,
+      matches,
+      photos: photosBackup,
     }
   }
 
-  async importar(backup: BackupCampeonato): Promise<string> {
+  async importChampionship(backup: ChampionshipBackup): Promise<string> {
     // Gera novos IDs para não colidir com dados existentes, mantendo as
     // referências internas (times, fotos, próximas partidas) consistentes.
-    const mapa = new Map<string, string>()
-    const remapear = (id: string): string => {
-      let novo = mapa.get(id)
-      if (!novo) {
-        novo = novoId()
-        mapa.set(id, novo)
+    const idMap = new Map<string, string>()
+    const remap = (id: string): string => {
+      let mapped = idMap.get(id)
+      if (!mapped) {
+        mapped = newId()
+        idMap.set(id, mapped)
       }
-      return novo
+      return mapped
     }
 
-    const campeonato: Campeonato = {
-      ...backup.campeonato,
-      id: remapear(backup.campeonato.id),
-      campeaoTimeId: backup.campeonato.campeaoTimeId
-        ? remapear(backup.campeonato.campeaoTimeId)
+    const championship: Championship = {
+      ...backup.championship,
+      id: remap(backup.championship.id),
+      championTeamId: backup.championship.championTeamId
+        ? remap(backup.championship.championTeamId)
         : undefined,
     }
 
-    const times: Time[] = backup.times.map((time) => ({
-      ...time,
-      id: remapear(time.id),
-      campeonatoId: campeonato.id,
-      fotoId: time.fotoId ? remapear(time.fotoId) : undefined,
+    const teams: Team[] = backup.teams.map((team) => ({
+      ...team,
+      id: remap(team.id),
+      championshipId: championship.id,
+      photoId: team.photoId ? remap(team.photoId) : undefined,
     }))
 
-    const partidas: Partida[] = backup.partidas.map((partida) => ({
-      ...partida,
-      id: remapear(partida.id),
-      campeonatoId: campeonato.id,
-      ladoATimeId: partida.ladoATimeId ? remapear(partida.ladoATimeId) : undefined,
-      ladoBTimeId: partida.ladoBTimeId ? remapear(partida.ladoBTimeId) : undefined,
-      vencedorTimeId: partida.vencedorTimeId
-        ? remapear(partida.vencedorTimeId)
-        : undefined,
-      proximaPartidaId: partida.proximaPartidaId
-        ? remapear(partida.proximaPartidaId)
-        : undefined,
+    const matches: Match[] = backup.matches.map((match) => ({
+      ...match,
+      id: remap(match.id),
+      championshipId: championship.id,
+      sideATeamId: match.sideATeamId ? remap(match.sideATeamId) : undefined,
+      sideBTeamId: match.sideBTeamId ? remap(match.sideBTeamId) : undefined,
+      winnerTeamId: match.winnerTeamId ? remap(match.winnerTeamId) : undefined,
+      nextMatchId: match.nextMatchId ? remap(match.nextMatchId) : undefined,
     }))
 
-    const fotos: Foto[] = await Promise.all(
-      backup.fotos.map(async (foto) => ({
-        id: remapear(foto.id),
-        campeonatoId: campeonato.id,
-        blob: await dataUrlParaBlob(foto.dataUrl),
+    const photos: Photo[] = await Promise.all(
+      backup.photos.map(async (photo) => ({
+        id: remap(photo.id),
+        championshipId: championship.id,
+        blob: await dataUrlToBlob(photo.dataUrl),
       })),
     )
 
-    const db = await abrirDb()
+    const db = await openDb()
     const tx = db.transaction(
-      [STORE_CAMPEONATOS, STORE_TIMES, STORE_PARTIDAS, STORE_FOTOS],
+      [STORE_CHAMPIONSHIPS, STORE_TEAMS, STORE_MATCHES, STORE_PHOTOS],
       'readwrite',
     )
-    tx.objectStore(STORE_CAMPEONATOS).put(campeonato)
-    const storeTimes = tx.objectStore(STORE_TIMES)
-    for (const time of times) storeTimes.put(time)
-    const storePartidas = tx.objectStore(STORE_PARTIDAS)
-    for (const partida of partidas) storePartidas.put(partida)
-    const storeFotos = tx.objectStore(STORE_FOTOS)
-    for (const foto of fotos) storeFotos.put(foto)
-    await fimDaTransacao(tx)
+    tx.objectStore(STORE_CHAMPIONSHIPS).put(championship)
+    const teamsStore = tx.objectStore(STORE_TEAMS)
+    for (const team of teams) teamsStore.put(team)
+    const matchesStore = tx.objectStore(STORE_MATCHES)
+    for (const match of matches) matchesStore.put(match)
+    const photosStore = tx.objectStore(STORE_PHOTOS)
+    for (const photo of photos) photosStore.put(photo)
+    await transactionDone(tx)
 
-    return campeonato.id
+    return championship.id
   }
 }
 
-/** Apaga todos os registros de um store cujo índice `campeonatoId` bate. */
-function apagarPorIndice(
+/** Apaga todos os registros de um store cujo índice `championshipId` bate. */
+function deleteByIndex(
   tx: IDBTransaction,
   store: string,
-  campeonatoId: string,
+  championshipId: string,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const idx = tx.objectStore(store).index('campeonatoId')
-    const req = idx.openKeyCursor(IDBKeyRange.only(campeonatoId))
+    const idx = tx.objectStore(store).index(INDEX_CHAMPIONSHIP)
+    const req = idx.openKeyCursor(IDBKeyRange.only(championshipId))
     req.onsuccess = () => {
       const cursor = req.result
       if (!cursor) {

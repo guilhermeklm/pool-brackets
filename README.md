@@ -28,20 +28,27 @@ Especificação completa: [`docs/especificacao.md`](docs/especificacao.md).
 
 Separação **domínio × persistência × UI**, pensada para evoluir para multi-dispositivo:
 
+> Código (identificadores, arquivos e pastas) em **inglês**; textos de UI em **português**.
+
 ```
 src/
   domain/        Tipos e regras puras (testáveis, sem React/DB)
     types.ts
+    factories.ts
   data/          Camada de persistência trocável
-    repositorio.ts   Interface Repositorio (as telas falam só com ela)
+    repository.ts    Interface Repository (as telas falam só com ela)
     indexeddb.ts     Implementação sobre IndexedDB
     uuid.ts          IDs UUID gerados no cliente
     base64.ts        Blob <-> data URL (para o backup)
     index.ts         Instância única do repositório
+  utils/         money.ts, image.ts
+  hooks/         useObjectUrl.ts
+  components/    ui.tsx, PhotoCapture.tsx, TeamPhoto.tsx
+  screens/       HomeScreen.tsx, NewChampionship.tsx, TeamRegistration.tsx
 ```
 
 - **Camada de repositório trocável:** as telas conversam com a interface
-  `Repositorio`, não com o IndexedDB. Trocar por uma API futura = trocar só a
+  `Repository`, não com o IndexedDB. Trocar por uma API futura = trocar só a
   implementação em `data/index.ts`.
 - **IDs UUID no cliente:** evitam conflito quando houver sincronização.
 - **Dados serializáveis em JSON limpo:** mapeiam direto para endpoints/tabelas.

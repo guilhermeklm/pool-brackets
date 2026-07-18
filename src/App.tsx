@@ -1,14 +1,19 @@
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { HomeScreen } from './screens/HomeScreen'
+import { NewChampionship } from './screens/NewChampionship'
+import { TeamRegistration } from './screens/TeamRegistration'
+
 export default function App() {
   return (
-    <main className="mx-auto flex min-h-svh max-w-md flex-col items-center justify-center gap-4 p-6 text-center">
-      <div className="text-5xl">🎱</div>
-      <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-        PoolBrackets
-      </h1>
-      <p className="text-slate-600 dark:text-slate-400">
-        Setup do projeto concluído. Camada de dados pronta — próximo passo: telas
-        de campeonato e cadastro de times.
-      </p>
-    </main>
+    <BrowserRouter>
+      <div className="mx-auto min-h-svh w-full max-w-md bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+        <Routes>
+          <Route path="/" element={<HomeScreen />} />
+          <Route path="/new" element={<NewChampionship />} />
+          <Route path="/championship/:id/teams" element={<TeamRegistration />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+    </BrowserRouter>
   )
 }

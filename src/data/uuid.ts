@@ -5,7 +5,7 @@
  * sincronização com backend no futuro. Usa `crypto.randomUUID` quando
  * disponível, com um fallback baseado em `crypto.getRandomValues`.
  */
-export function novoId(): string {
+export function newId(): string {
   const c = globalThis.crypto
   if (typeof c?.randomUUID === 'function') {
     return c.randomUUID()
@@ -13,7 +13,7 @@ export function novoId(): string {
 
   const bytes = new Uint8Array(16)
   c.getRandomValues(bytes)
-  // Versão 4 e variante conforme RFC 4122.
+  // Versão 4 e variante conforme a RFC 4122.
   bytes[6] = (bytes[6] & 0x0f) | 0x40
   bytes[8] = (bytes[8] & 0x3f) | 0x80
 
