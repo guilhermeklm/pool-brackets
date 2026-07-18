@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { Button, Header, Field } from '../components/ui'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Button, Header, Field, PaymentChip } from '../components/ui'
 import { PhotoCapture } from '../components/PhotoCapture'
 import { TeamPhoto } from '../components/TeamPhoto'
 import { repository } from '../data'
 import { createTeam } from '../domain/factories'
+import { computePool } from '../domain/pool'
 import type { Championship, Photo, Team } from '../domain/types'
 import { newId } from '../data/uuid'
 import { useObjectUrl } from '../hooks/useObjectUrl'
+import { formatCents } from '../utils/money'
 
 export function TeamRegistration() {
   const { id = '' } = useParams()
@@ -97,6 +99,15 @@ export function TeamRegistration() {
     await repository.deleteTeam(team.id)
     if (team.photoId) await repository.deletePhoto(team.photoId)
     setTeams((current) => current.filter((t) => t.id !== team.id))
+  }
+
+  async function togglePayment(team: Team) {
+    const updated: Team = {
+      ...team,
+      paymentStatus: team.paymentStatus === 'paid' ? 'pending' : 'paid',
+    }
+    setTeams((current) => current.map((t) => (t.id === team.id ? updated : t)))
+    await repository.saveTeam(updated)
   }
 
   const total = teams.length
@@ -238,6 +249,12 @@ export function TeamRegistration() {
                     </p>
                   )}
                 </div>
+                {championship.betEnabled && (
+                  <PaymentChip
+                    paid={team.paymentStatus === 'paid'}
+                    onClick={() => togglePayment(team)}
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => removeTeam(team)}
@@ -251,6 +268,21 @@ export function TeamRegistration() {
           </ul>
         )}
       </main>
+
+      {championship.betEnabled && (
+        <div className="sticky bottom-0 border-t border-slate-200 bg-white/90 p-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
+          <Link
+            to={`/championship/${id}/pool`}
+            className="flex items-center justify-between rounded-xl bg-slate-100 px-4 py-3.5 font-semibold dark:bg-slate-800"
+          >
+            <span>💰 Bolão</span>
+            <span className="text-emerald-600 dark:text-emerald-400">
+              {formatCents(computePool(teams, championship.entryFeeCents).collectedCents)}{' '}
+              arrecadado ›
+            </span>
+          </Link>
+        </div>
+      )}
 
       {capturing && (
         <PhotoCapture

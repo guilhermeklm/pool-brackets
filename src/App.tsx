@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { HomeScreen } from './screens/HomeScreen'
 import { NewChampionship } from './screens/NewChampionship'
 import { TeamRegistration } from './screens/TeamRegistration'
+import { PoolPanel } from './screens/PoolPanel'
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
           <Route path="/" element={<HomeScreen />} />
           <Route path="/new" element={<NewChampionship />} />
           <Route path="/championship/:id/teams" element={<TeamRegistration />} />
+          <Route path="/championship/:id/pool" element={<PoolPanel />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

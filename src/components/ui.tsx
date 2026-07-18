@@ -55,6 +55,29 @@ export function Button({
   )
 }
 
+/** Chip de status de pagamento, clicável para alternar Pago/Pendente. */
+export function PaymentChip({
+  paid,
+  onClick,
+}: {
+  paid: boolean
+  onClick?: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+        paid
+          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+          : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+      }`}
+    >
+      {paid ? '✓ Pago' : 'Pendente'}
+    </button>
+  )
+}
+
 /** Campo de texto com rótulo. */
 export function Field({
   label,
