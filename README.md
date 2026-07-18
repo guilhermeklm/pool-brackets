@@ -22,7 +22,15 @@ Especificação completa: [`docs/especificacao.md`](docs/especificacao.md).
 | `npm run build` | Type-check (`tsc -b`) + build de produção |
 | `npm run typecheck` | Só a checagem de tipos |
 | `npm run lint` | Lint com oxlint |
+| `npm test` | Testes (Vitest) |
+| `npm run test:watch` | Testes em modo watch |
 | `npm run preview` | Serve o build de produção localmente |
+
+## Testes
+
+Vitest cobrindo a lógica pura de domínio (`*.test.ts` ao lado do código):
+`bracket.test.ts` (motor de chaveamento: sorteio, BYE, avanço, correção),
+`pool.test.ts` (cálculo do bolão) e `money.test.ts` (moeda em centavos).
 
 ## Arquitetura
 
