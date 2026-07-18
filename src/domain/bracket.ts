@@ -204,6 +204,27 @@ export function getFinalMatch(matches: Match[]): Match | undefined {
   return matches.reduce((a, b) => (b.round > a.round ? b : a))
 }
 
+/** Total de rodadas do chaveamento. */
+export function totalRounds(matches: Match[]): number {
+  return matches.reduce((max, m) => Math.max(max, m.round), 0)
+}
+
+/** Rótulo da rodada a partir de quantas partidas ela tem. */
+export function roundLabel(matchesInRound: number): string {
+  switch (matchesInRound) {
+    case 1:
+      return 'Final'
+    case 2:
+      return 'Semifinais'
+    case 4:
+      return 'Quartas de final'
+    case 8:
+      return 'Oitavas de final'
+    default:
+      return `${matchesInRound} partidas`
+  }
+}
+
 // ---- Internos ----
 
 function advanceWinner(map: Map<string, Match>, match: Match): void {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Navigate, useParams } from 'react-router-dom'
 import { Header, PaymentChip } from '../components/ui'
 import { TeamPhoto } from '../components/TeamPhoto'
 import { repository } from '../data'
@@ -59,6 +59,12 @@ export function PoolPanel() {
         </p>
       </div>
     )
+  }
+
+  // O painel de gerência do bolão só existe na fase de inscrições. Depois do
+  // sorteio o resumo financeiro é exibido direto no chaveamento.
+  if (championship.status !== 'registration') {
+    return <Navigate to={`/championship/${id}/bracket`} replace />
   }
 
   const pool = computePool(teams, championship.entryFeeCents)

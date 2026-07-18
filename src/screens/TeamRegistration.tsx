@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Button, Header, Field, PaymentChip } from '../components/ui'
+import { OverflowMenu } from '../components/OverflowMenu'
+import type { MenuItem } from '../components/OverflowMenu'
 import { PhotoCapture } from '../components/PhotoCapture'
 import { TeamPhoto } from '../components/TeamPhoto'
 import { repository } from '../data'
 import { createTeam } from '../domain/factories'
+import { generateBracket } from '../domain/bracket'
 import { computePool } from '../domain/pool'
 import type { Championship, Photo, Team } from '../domain/types'
 import { newId } from '../data/uuid'
@@ -28,6 +31,10 @@ export function TeamRegistration() {
   const [capturing, setCapturing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  // Edição do nome do campeonato (só na fase de inscrições).
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
 
   const previewUrl = useObjectUrl(photoBlob)
 
@@ -110,11 +117,71 @@ export function TeamRegistration() {
     await repository.saveTeam(updated)
   }
 
+  async function drawBracket() {
+    if (!championship || teams.length < 2) return
+    if (championship.betEnabled && !allPaid) return
+    const matches = generateBracket(
+      championship.id,
+      teams.map((t) => t.id),
+    )
+    await repository.saveMatches(matches)
+    const updated: Championship = {
+      ...championship,
+      status: 'in_progress',
+      updatedAt: new Date().toISOString(),
+    }
+    await repository.saveChampionship(updated)
+    navigate(`/championship/${id}/bracket`)
+  }
+
+  function startEditName() {
+    if (!championship) return
+    setNameDraft(championship.name)
+    setEditingName(true)
+  }
+
+  async function saveName() {
+    if (!championship) return
+    const trimmed = nameDraft.trim()
+    if (!trimmed) return
+    const updated: Championship = {
+      ...championship,
+      name: trimmed,
+      updatedAt: new Date().toISOString(),
+    }
+    setChampionship(updated)
+    setEditingName(false)
+    await repository.saveChampionship(updated)
+  }
+
+  async function deleteChampionship() {
+    if (!championship) return
+    if (
+      !confirm(
+        `Excluir o campeonato "${championship.name}"? Essa ação não pode ser desfeita.`,
+      )
+    ) {
+      return
+    }
+    await repository.deleteChampionship(championship.id)
+    navigate('/')
+  }
+
   const total = teams.length
   const countLabel = useMemo(
     () => `${total} ${total === 1 ? 'inscrito' : 'inscritos'}`,
     [total],
   )
+  const locked = championship?.status !== 'registration'
+  // Com aposta ativa, só é possível sortear quando todos os times pagaram.
+  const allPaid = teams.length > 0 && teams.every((t) => t.paymentStatus === 'paid')
+  const needsPayment = (championship?.betEnabled ?? false) && !allPaid
+  const canDraw = teams.length >= 2 && !needsPayment
+
+  const menuItems: MenuItem[] = [
+    ...(locked ? [] : [{ label: 'Editar nome', onClick: startEditName }]),
+    { label: 'Excluir campeonato', onClick: deleteChampionship, danger: true },
+  ]
 
   if (championship === undefined) {
     return (
@@ -145,14 +212,51 @@ export function TeamRegistration() {
         title={championship.name}
         backTo="/"
         action={
-          <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-            {countLabel}
-          </span>
+          <div className="flex items-center gap-1">
+            <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              {countLabel}
+            </span>
+            <OverflowMenu items={menuItems} />
+          </div>
         }
       />
 
       <main className="flex flex-1 flex-col gap-5 px-4 py-5 pb-6">
+        {editingName && (
+          <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
+            <Field
+              label="Nome do campeonato"
+              value={nameDraft}
+              autoFocus
+              onChange={(e) => setNameDraft(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => setEditingName(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={saveName}
+                disabled={!nameDraft.trim()}
+              >
+                Salvar
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {locked && (
+          <p className="rounded-xl bg-slate-100 px-4 py-3 text-center text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            A chave já foi sorteada — a lista de times está fechada.
+          </p>
+        )}
+
         {/* Formulário */}
+        {!locked && (
         <section className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
           <div className="flex items-center gap-3">
             <button
@@ -227,6 +331,7 @@ export function TeamRegistration() {
             {saving ? 'Salvando…' : 'Adicionar time'}
           </Button>
         </section>
+        )}
 
         {/* Lista de times */}
         {teams.length === 0 ? (
@@ -252,28 +357,30 @@ export function TeamRegistration() {
                 {championship.betEnabled && (
                   <PaymentChip
                     paid={team.paymentStatus === 'paid'}
-                    onClick={() => togglePayment(team)}
+                    onClick={locked ? undefined : () => togglePayment(team)}
                   />
                 )}
-                <button
-                  type="button"
-                  onClick={() => removeTeam(team)}
-                  aria-label={`Remover ${team.name}`}
-                  className="shrink-0 rounded-full p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
-                >
-                  ✕
-                </button>
+                {!locked && (
+                  <button
+                    type="button"
+                    onClick={() => removeTeam(team)}
+                    aria-label={`Remover ${team.name}`}
+                    className="shrink-0 rounded-full p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                  >
+                    ✕
+                  </button>
+                )}
               </li>
             ))}
           </ul>
         )}
       </main>
 
-      {championship.betEnabled && (
-        <div className="sticky bottom-0 border-t border-slate-200 bg-white/90 p-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
+      <div className="sticky bottom-0 flex flex-col gap-2 border-t border-slate-200 bg-white/90 p-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
+        {championship.betEnabled && (
           <Link
             to={`/championship/${id}/pool`}
-            className="flex items-center justify-between rounded-xl bg-slate-100 px-4 py-3.5 font-semibold dark:bg-slate-800"
+            className="flex items-center justify-between rounded-xl bg-slate-100 px-4 py-3 font-semibold dark:bg-slate-800"
           >
             <span>💰 Bolão</span>
             <span className="text-emerald-600 dark:text-emerald-400">
@@ -281,8 +388,31 @@ export function TeamRegistration() {
               arrecadado ›
             </span>
           </Link>
-        </div>
-      )}
+        )}
+
+        {locked ? (
+          <Button className="w-full" onClick={() => navigate(`/championship/${id}/bracket`)}>
+            Ver chaveamento →
+          </Button>
+        ) : (
+          <>
+            <Button className="w-full" onClick={drawBracket} disabled={!canDraw}>
+              🎲 Sortear chave
+            </Button>
+            {teams.length < 2 ? (
+              <p className="text-center text-xs text-slate-400">
+                Cadastre ao menos 2 times para sortear.
+              </p>
+            ) : (
+              needsPayment && (
+                <p className="text-center text-xs text-amber-600 dark:text-amber-400">
+                  Todos os times precisam pagar a entrada antes de sortear.
+                </p>
+              )
+            )}
+          </>
+        )}
+      </div>
 
       {capturing && (
         <PhotoCapture

@@ -1,7 +1,7 @@
 # Especificação — PoolBrackets (App de Campeonato de Sinuca)
 
 > **Nome do app:** PoolBrackets · **slug:** `pool-brackets`
-> **Versão do documento:** 1.0
+> **Versão do documento:** 1.1
 > **Escopo:** v1 (controle em um único celular, offline)
 > **Última atualização:** 2026-07-18
 
@@ -59,6 +59,46 @@ Funcionalidade: Criar um novo campeonato
     E tento confirmar a criação
     Então vejo uma mensagem pedindo o nome do campeonato
     E o campeonato não é criado
+```
+
+### Funcionalidade: Gerenciar campeonato (editar / excluir)
+
+```gherkin
+Funcionalidade: Editar e excluir o campeonato
+  Como organizador
+  Quero renomear ou apagar o campeonato
+  Para corrigir o nome e remover campeonatos que não vou mais usar
+
+  Cenário: Editar o nome durante as inscrições
+    Dado que o campeonato está com status "Inscrições"
+    Quando abro o menu de opções e toco em "Editar nome"
+    E informo o novo nome "Rachão do Sábado"
+    E confirmo
+    Então o campeonato passa a se chamar "Rachão do Sábado"
+
+  Cenário: Nome não pode ficar em branco ao editar
+    Dado que estou editando o nome do campeonato
+    Quando apago todo o texto do nome
+    Então a ação de salvar fica indisponível
+    E o nome anterior é mantido
+
+  Cenário: Não editar o nome após o sorteio
+    Dado que a chave já foi sorteada (status "Em andamento" ou "Finalizado")
+    Quando abro o menu de opções
+    Então a ação "Editar nome" não está disponível
+
+  Cenário: Excluir o campeonato em qualquer fase
+    Dado que estou em um campeonato (em "Inscrições", "Em andamento" ou "Finalizado")
+    Quando abro o menu de opções e toco em "Excluir campeonato"
+    E confirmo a exclusão
+    Então o campeonato, seus times, fotos, chave e resultados são apagados
+    E volto para a tela inicial
+
+  Cenário: Cancelar a exclusão
+    Dado que toquei em "Excluir campeonato"
+    Quando não confirmo a exclusão
+    Então nada é apagado
+    E continuo no campeonato
 ```
 
 ### Funcionalidade: Cadastro de time com foto
@@ -135,6 +175,13 @@ Funcionalidade: Controlar o pagamento das entradas
     Quando toco no status de pagamento do time
     Então o status volta para "Pendente"
     E o valor arrecadado diminui em R$ 20,00
+
+  Cenário: Bolão fechado após o início do campeonato
+    Dado que a chave já foi sorteada (status "Em andamento" ou "Finalizado")
+    Então a gestão de pagamentos deixa de existir (todos já pagaram para iniciar)
+    E o painel de bolão não é mais acessível (redireciona para o chaveamento)
+    E o resumo financeiro (entrada por time, arrecadado e prêmio) passa a ser
+      exibido dentro da tela do chaveamento
 ```
 
 ### Funcionalidade: Sorteio do chaveamento
@@ -165,11 +212,27 @@ Funcionalidade: Sortear o chaveamento
     Então vejo uma mensagem informando que são necessários ao menos 2 times
     E o sorteio não acontece
 
+  Cenário: Bloquear sorteio enquanto houver pagamentos pendentes
+    Dado que a aposta está ativa
+    E há times com pagamento "Pendente"
+    Quando tento sortear a chave
+    Então o botão "Sortear chave" fica indisponível
+    E vejo a mensagem "Todos os times precisam pagar a entrada antes de sortear"
+    E o sorteio só é liberado quando todos os times estão "Pago"
+
   Cenário: Confirmar antes de re-sortear
     Dado que a chave já foi sorteada e há resultados registrados
-    Quando toco em "Sortear chave" novamente
+    E o campeonato está "Em andamento"
+    Quando toco em "Sortear novamente"
     Então vejo um aviso de que os resultados serão perdidos
     E o sorteio só refaz a chave se eu confirmar
+
+  Cenário: Bloquear re-sorteio após finalizado
+    Dado que o campeonato está "Finalizado" (já tem campeão)
+    Quando abro o menu de opções do chaveamento
+    Então a ação "Sortear novamente" não está disponível
+    E preciso corrigir o resultado da final (voltando para "Em andamento")
+      para poder sortear novamente
 ```
 
 ### Funcionalidade: Visualizar chaveamento
@@ -262,19 +325,20 @@ Funcionalidade: Animação de vitória
     E volto para o chaveamento com o resultado já aplicado
 ```
 
-### Funcionalidade: Painel do bolão
+### Funcionalidade: Painel do bolão (fase de inscrições)
 
 ```gherkin
-Funcionalidade: Painel do bolão
+Funcionalidade: Painel do bolão nas inscrições
   Como organizador
-  Quero ver o resumo financeiro do campeonato
-  Para manter a aposta transparente
+  Quero acompanhar os pagamentos antes de começar
+  Para saber quem já pagou e liberar o sorteio
 
   Contexto:
     Dado que a aposta está ativa com entrada de R$ 20,00
+    E o campeonato está em "Inscrições"
     E há 6 times cadastrados, dos quais 4 estão "Pago"
 
-  Cenário: Ver o resumo do bolão
+  Cenário: Ver o resumo do bolão nas inscrições
     Quando abro o painel do bolão
     Então vejo o "Arrecadado" como R$ 80,00
     E vejo o "Pendente" como R$ 40,00
@@ -287,6 +351,13 @@ Funcionalidade: Painel do bolão
     Quando marco mais um time como "Pago"
     Então o "Arrecadado" aumenta em R$ 20,00
     E o "Pendente" diminui em R$ 20,00
+
+  Cenário: Painel só existe nas inscrições
+    Dado que a chave já foi sorteada
+    Quando tento abrir o painel do bolão
+    Então sou levado ao chaveamento
+    E o resumo financeiro (entrada por time, arrecadado e prêmio)
+      aparece dentro da própria tela do chaveamento
 ```
 
 ### Funcionalidade: QR Code Pix (opcional, offline)
@@ -427,6 +498,10 @@ Itens fora do escopo da v1, organizados por tema. A arquitetura da v1 já é pre
 - **Backup:** **exportar/importar** o campeonato em JSON já na **v1** (mitiga perda de dados ao trocar de celular).
 - **Limite de participantes:** suportar até **32 times** na v1 sem degradar a UI do chaveamento.
 - **Prêmio do campeão:** calculado sobre o **pote previsto** (todos os inscritos). O painel do bolão exibe também o **arrecadado real** para transparência.
+- **Bolão fechado após o início:** o sorteio da chave só é liberado quando **todos os times pagaram** (com aposta ativa). Depois de iniciado, os pagamentos ficam **somente leitura** — não é possível editar o bolão em "Em andamento" nem "Finalizado". Assim o pote previsto = arrecadado no início.
+- **Editar nome:** permitido apenas na fase de **Inscrições**; após o sorteio o nome fica travado.
+- **Excluir campeonato:** disponível em **qualquer fase** (Inscrições, Em andamento, Finalizado), sempre com confirmação; apaga times, fotos, chave e resultados.
+- **Re-sortear:** permitido apenas com o campeonato **Em andamento**; um campeonato **Finalizado** não pode ser re-sorteado (é preciso corrigir a final para reabri-lo).
 - **Nome/branding:** **PoolBrackets** (slug `pool-brackets`). Ícone da PWA a definir na construção.
 
 ### Perguntas em aberto (a decidir)

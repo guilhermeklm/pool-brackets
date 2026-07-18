@@ -55,7 +55,10 @@ export function Button({
   )
 }
 
-/** Chip de status de pagamento, clicável para alternar Pago/Pendente. */
+/**
+ * Chip de status de pagamento. Clicável (alterna Pago/Pendente) quando recebe
+ * `onClick`; caso contrário fica apenas informativo (read-only).
+ */
 export function PaymentChip({
   paid,
   onClick,
@@ -63,17 +66,22 @@ export function PaymentChip({
   paid: boolean
   onClick?: () => void
 }) {
+  const colors = paid
+    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+    : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+  const label = paid ? '✓ Pago' : 'Pendente'
+  const base = `shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${colors}`
+
+  if (!onClick) {
+    return <span className={base}>{label}</span>
+  }
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-        paid
-          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-          : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-      }`}
+      className={`${base} transition-colors`}
     >
-      {paid ? '✓ Pago' : 'Pendente'}
+      {label}
     </button>
   )
 }

@@ -54,7 +54,11 @@ export function HomeScreen() {
             {championships.map((c) => (
               <li key={c.id}>
                 <Link
-                  to={`/championship/${c.id}/teams`}
+                  to={
+                    c.status === 'registration'
+                      ? `/championship/${c.id}/teams`
+                      : `/championship/${c.id}/bracket`
+                  }
                   className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 active:scale-[0.99] dark:border-slate-800 dark:bg-slate-900"
                 >
                   <div className="min-w-0">

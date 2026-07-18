@@ -8,6 +8,7 @@ import {
   resetMatchResult,
   getChampionId,
   getFinalMatch,
+  roundLabel,
 } from './bracket'
 import type { Match, Side } from './types'
 
@@ -36,6 +37,18 @@ describe('nextPowerOfTwo', () => {
     [32, 32],
   ])('nextPowerOfTwo(%i) = %i', (n, expected) => {
     expect(nextPowerOfTwo(n)).toBe(expected)
+  })
+})
+
+describe('roundLabel', () => {
+  it.each([
+    [1, 'Final'],
+    [2, 'Semifinais'],
+    [4, 'Quartas de final'],
+    [8, 'Oitavas de final'],
+    [16, '16 partidas'],
+  ])('%i partidas -> %s', (count, label) => {
+    expect(roundLabel(count)).toBe(label)
   })
 })
 
